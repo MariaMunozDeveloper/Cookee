@@ -5,6 +5,7 @@ const userController = {};
 const bcrypt = require('bcryptjs');
 const jwtService = require('../services/jwt.service');
 const cloudinary = require('../config/cloudinary');
+const Publication = require('../models/publication.model');
 
 userController.home = async (req, res) => {
     return res.status(200).json({
@@ -354,25 +355,28 @@ userController.uploadAvatar = async (req, res) => {
 userController.getCounters = async (req, res) => {
     try {
         let userId = req.user.sub;
-
-        if (req.params.id) {
-            userId = req.params.id;
-        }
+        if (req.params.id) userId = req.params.id;
 
         const counters = await getCountFollow(userId);
+
+        const likesResult = await Publication.aggregate([
+            { $match: { user: new (require('mongoose').Types.ObjectId)(userId) } },
+            { $project: { likesCount: { $size: '$likes' } } },
+            { $group: { _id: null, total: { $sum: '$likesCount' } } }
+        ]);
+
+        const totalLikes = likesResult[0]?.total ?? 0;
 
         return res.status(200).json({
             status: true,
             userId,
             following: counters.following,
-            followed: counters.followed
+            followed: counters.followed,
+            totalLikes
         });
 
     } catch (error) {
-        return res.status(500).json({
-            status: false,
-            message: error.message
-        });
+        return res.status(500).json({ status: false, message: error.message });
     }
 };
 

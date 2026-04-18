@@ -115,4 +115,25 @@ messageController.getUnreadCount = async (req, res) => {
     }
 };
 
+messageController.remove = async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const userId = req.user.sub;
+
+        const deleted = await Message.findOneAndDelete({
+            _id: messageId,
+            $or: [{ receiver: userId }, { emitter: userId }]
+        });
+
+        if (!deleted) {
+            return res.status(404).json({ status: false, message: 'Mensaje no encontrado' });
+        }
+
+        return res.status(200).json({ status: true, message: 'Mensaje eliminado' });
+
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message });
+    }
+};
+
 module.exports = messageController;
