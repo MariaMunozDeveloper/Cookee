@@ -1,6 +1,7 @@
 'use strict';
 
 const Publication = require('../models/publication.model');
+const Comment = require('../models/comment.model');
 const Follow = require('../models/follow.model');
 const fs = require('fs');
 const path = require('path');
@@ -12,7 +13,6 @@ publicationController.save = async (req, res) => {
     try {
         const params = req.body;
 
-        //comprobamos que tenga titulo
         if (!params.title || !params.title.trim()) {
             return res.status(400).json({
                 status: false,
@@ -105,16 +105,80 @@ publicationController.feed = async (req, res) => {
     }
 };
 
+publicationController.explore = async (req, res) => {
+    try {
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const limit = 12;
+        const sort = req.query.sort || 'recent';
+        const hashtag = req.query.hashtag || '';
+
+        const filtro = hashtag ? { hashtags: hashtag.toLowerCase() } : {};
+
+        let sortOption = {};
+        if (sort === 'likes') sortOption = { likes: -1 };
+        else if (sort === 'views') sortOption = { views: -1 };
+        else sortOption = { createdAt: -1 };
+
+        const options = {
+            page,
+            limit,
+            sort: sortOption,
+            populate: { path: 'user', select: '-password' }
+        };
+
+        const result = await Publication.paginate(filtro, options);
+
+        const publicationIds = result.docs.map(p => p._id);
+        const commentCounts = await Comment.aggregate([
+            { $match: { publication: { $in: publicationIds } } },
+            { $group: { _id: '$publication', count: { $sum: 1 } } }
+        ]);
+
+        const countMap = {};
+        commentCounts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+        let userId = null;
+        const authHeader = req.headers.authorization;
+        if (authHeader) {
+            try {
+                const jwt = require('../services/jwt.service');
+                const token = authHeader.split(' ')[1];
+                const decoded = jwt.decode(token);
+                userId = decoded?.sub || null;
+            } catch (_) {}
+        }
+
+        const publications = result.docs.map(pub => {
+            const obj = pub.toObject();
+            obj.commentsCount = countMap[pub._id.toString()] || 0;
+            obj.hasLike = userId
+                ? pub.likes.some(id => id.toString() === userId)
+                : false;
+            return obj;
+        });
+
+        return res.status(200).json({
+            status: true,
+            publications,
+            total: result.totalDocs,
+            totalPages: result.totalPages,
+            currentPage: result.page
+        });
+
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message });
+    }
+};
+
 publicationController.getPublicationById = async (req, res) => {
     try {
         const publicationId = req.params.id;
 
-        // sumamos una vista cada vez que alguien abre la receta
-       const publication = await Publication.findByIdAndUpdate(
-           publicationId,
-           { $inc: { views: 1 } },
-           { returnDocument: 'after' }
-       ).populate('user', '-password');
+        const publication = await Publication.findByIdAndUpdate(
+            publicationId,
+            { $inc: { views: 1 } },
+            { returnDocument: 'after' }
+        ).populate('user', '-password');
 
         if (!publication) {
             return res.status(404).json({
@@ -124,6 +188,49 @@ publicationController.getPublicationById = async (req, res) => {
         }
 
         return res.status(200).json({ status: true, publication });
+
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message });
+    }
+};
+
+publicationController.update = async (req, res) => {
+    try {
+        const publicationId = req.params.id;
+        const userId = req.user.sub;
+        const params = req.body;
+
+        const publication = await Publication.findOne({ _id: publicationId, user: userId });
+
+        if (!publication) {
+            return res.status(404).json({
+                status: false,
+                message: 'Receta no encontrada o sin permiso'
+            });
+        }
+
+        if (params.title) publication.title = params.title;
+        if (params.description !== undefined) publication.description = params.description;
+        if (params.text !== undefined) publication.text = params.text;
+        if (params.recommendations !== undefined) publication.recommendations = params.recommendations;
+        if (params.raciones !== undefined) publication.raciones = params.raciones;
+        if (params.tiempoHorno !== undefined) publication.tiempoHorno = params.tiempoHorno;
+        if (params.temperaturaHorno !== undefined) publication.temperaturaHorno = params.temperaturaHorno;
+        if (params.hashtags) publication.hashtags = params.hashtags;
+        if (params.ingredients) publication.ingredients = params.ingredients;
+        if (params.steps) {
+            publication.steps = params.steps;
+            publication.markModified('steps');
+        }
+        if (params.images) publication.images = params.images;
+
+        await publication.save();
+
+        return res.status(200).json({
+            status: true,
+            message: 'Receta actualizada correctamente',
+            publication
+        });
 
     } catch (error) {
         return res.status(500).json({ status: false, message: error.message });
@@ -271,86 +378,6 @@ publicationController.getByUser = async (req, res) => {
     }
 };
 
-publicationController.update = async (req, res) => {
-    try {
-        const publicationId = req.params.id;
-        const userId = req.user.sub;
-        const params = req.body;
-
-        const publication = await Publication.findOne({ _id: publicationId, user: userId });
-
-        if (!publication) {
-            return res.status(404).json({
-                status: false,
-                message: 'Receta no encontrada o sin permiso'
-            });
-        }
-
-        if (params.title) publication.title = params.title;
-        if (params.description !== undefined) publication.description = params.description;
-        if (params.text !== undefined) publication.text = params.text;
-        if (params.recommendations !== undefined) publication.recommendations = params.recommendations;
-        if (params.raciones !== undefined) publication.raciones = params.raciones;
-        if (params.tiempoHorno !== undefined) publication.tiempoHorno = params.tiempoHorno;
-        if (params.temperaturaHorno !== undefined) publication.temperaturaHorno = params.temperaturaHorno;
-        if (params.hashtags) publication.hashtags = params.hashtags;
-        if (params.ingredients) publication.ingredients = params.ingredients;
-        if (params.steps) {
-            publication.steps = params.steps;
-            publication.markModified('steps');
-        }
-        if (params.images) {publication.images = params.images;
-        }
-
-        await publication.save();
-
-        return res.status(200).json({
-            status: true,
-            message: 'Receta actualizada correctamente',
-            publication
-        });
-
-    } catch (error) {
-        return res.status(500).json({ status: false, message: error.message });
-    }
-};
-
-publicationController.explore = async (req, res) => {
-    try {
-        const page = Math.max(parseInt(req.query.page) || 1, 1);
-        const limit = 12;
-        const sort = req.query.sort || 'recent';
-        const hashtag = req.query.hashtag || '';
-
-        const filtro = hashtag ? { hashtags: hashtag.toLowerCase() } : {};
-
-        let sortOption = {};
-        if (sort === 'likes') sortOption = { likes: -1 };
-        else if (sort === 'views') sortOption = { views: -1 };
-        else sortOption = { createdAt: -1 };
-
-        const options = {
-            page,
-            limit,
-            sort: sortOption,
-            populate: { path: 'user', select: '-password' }
-        };
-
-        const result = await Publication.paginate(filtro, options);
-
-        return res.status(200).json({
-            status: true,
-            publications: result.docs,
-            total: result.totalDocs,
-            totalPages: result.totalPages,
-            currentPage: result.page
-        });
-
-    } catch (error) {
-        return res.status(500).json({ status: false, message: error.message });
-    }
-};
-
 publicationController.toggleLike = async (req, res) => {
     try {
         const publicationId = req.params.id;
@@ -379,8 +406,7 @@ publicationController.toggleLike = async (req, res) => {
         });
 
     } catch (error) {
-         console.error('Error toggleLike:', error.message);
-            return res.status(500).json({ status: false, message: error.message });
+        return res.status(500).json({ status: false, message: error.message });
     }
 };
 
