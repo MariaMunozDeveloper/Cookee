@@ -1,11 +1,14 @@
 'use strict';
 
 const User = require('../models/user.model');
-const userController = {};
+const Publication = require('../models/publication.model');
+const Follow = require('../models/follow.model');
 const bcrypt = require('bcryptjs');
 const jwtService = require('../services/jwt.service');
 const cloudinary = require('../config/cloudinary');
-const Publication = require('../models/publication.model');
+const mongoose = require('mongoose');
+
+const userController = {};
 
 userController.register = async (req, res) => {
     const params = req.body;
@@ -269,9 +272,6 @@ userController.updateUser = async (req, res) => {
     }
 };
 
-const fs = require('fs');
-const path = require('path');
-
 userController.uploadAvatar = async (req, res) => {
     try {
         const userId = req.user.sub;
@@ -337,7 +337,7 @@ userController.getCounters = async (req, res) => {
         const counters = await getCountFollow(userId);
 
         const likesResult = await Publication.aggregate([
-            { $match: { user: new (require('mongoose').Types.ObjectId)(userId) } },
+            { $match: { user: new mongoose.Types.ObjectId(userId) } },
             { $project: { likesCount: { $size: '$likes' } } },
             { $group: { _id: null, total: { $sum: '$likesCount' } } }
         ]);
@@ -356,8 +356,6 @@ userController.getCounters = async (req, res) => {
         return res.status(500).json({ status: false, message: error.message });
     }
 };
-
-const Follow = require('../models/follow.model');
 
 async function followThisUser(miId, userId) {
     const following = await Follow.findOne({

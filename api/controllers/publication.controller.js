@@ -3,9 +3,8 @@
 const Publication = require('../models/publication.model');
 const Comment = require('../models/comment.model');
 const Follow = require('../models/follow.model');
-const fs = require('fs');
-const path = require('path');
 const cloudinary = require('../config/cloudinary');
+const jwt = require('../services/jwt.service');
 
 const publicationController = {};
 
@@ -141,7 +140,6 @@ publicationController.explore = async (req, res) => {
         const authHeader = req.headers.authorization;
         if (authHeader) {
             try {
-                const jwt = require('../services/jwt.service');
                 const token = authHeader.split(' ')[1];
                 const decoded = jwt.decode(token);
                 userId = decoded?.sub || null;
