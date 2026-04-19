@@ -7,39 +7,6 @@ const jwtService = require('../services/jwt.service');
 const cloudinary = require('../config/cloudinary');
 const Publication = require('../models/publication.model');
 
-userController.home = async (req, res) => {
-    return res.status(200).json({
-        status: true,
-        message: 'Hola mundo desde el controlador de usuarios'
-    });
-};
-
-userController.profile = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-
-        const user = await User.findById(userId).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                status: false,
-                message: 'Usuario no encontrado'
-            });
-        }
-
-        return res.status(200).json({
-            status: true,
-            user
-        });
-
-    } catch (error) {
-        return res.status(500).json({
-            status: false,
-            message: error.message
-        });
-    }
-};
-
 userController.register = async (req, res) => {
     const params = req.body;
     const user = new User();
