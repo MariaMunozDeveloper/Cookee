@@ -186,6 +186,16 @@ userController.listUsers = async (req, res) => {
         const miId = req.user.sub;
         const page = Math.max(parseInt(req.query.page) || 1, 1);
         const limit = Math.max(parseInt(req.query.limit) || 10, 1);
+        const search = req.query.search || '';
+
+        const filter = search
+            ? {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { nick: { $regex: search, $options: 'i' } }
+                ]
+            }
+            : {};
 
         const options = {
             page,
@@ -194,7 +204,7 @@ userController.listUsers = async (req, res) => {
             select: '-password'
         };
 
-        const result = await User.paginate({}, options);
+        const result = await User.paginate(filter, options);
 
         const followInfo = await followUserIds(miId);
 

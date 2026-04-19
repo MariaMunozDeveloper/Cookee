@@ -810,7 +810,7 @@ async function seed() {
         email: u.email,
         password,
         image: avatarUrl || null,
-        role: 'user'
+        role: 'ROLE_USER'
       });
 
       await usuario.save();

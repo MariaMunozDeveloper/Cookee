@@ -13,6 +13,7 @@ const publicationRoutes = require('./routes/publication.route');
 const messageRoutes = require('./routes/message.route');
 const commentRoutes = require('./routes/comment.route');
 const favoriteRoutes = require('./routes/favorite.route');
+const adminRoutes = require('./routes/admin.route');
 
 
 
@@ -34,5 +35,6 @@ app.use('/api/publication', publicationRoutes);
 app.use('/api/message', messageRoutes);
 app.use('/api/comment', commentRoutes);
 app.use('/api/favorite', favoriteRoutes);
+app.use('/api/admin', adminRoutes);
 
 module.exports = app;
